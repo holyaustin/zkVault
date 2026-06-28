@@ -117,8 +117,17 @@ fn main() -> Result<()> {
         .context("local receipt verification failed — do not submit this proof")?;
     println!("Receipt verified locally against ZKVAULT_GUEST_ID. Safe to submit.");
 
-    let seal_bytes =
-        bincode::serialize(&receipt.inner).context("failed to serialize receipt seal")?;
+    let seal_bytes = bincode::serialize(&receipt).context("failed to serialize receipt")?;
+    // NOTE: this serializes the WHOLE Receipt (journal + seal together),
+    // not just an internal seal field. Receipt's top-level Serialize impl
+    // is the stable, documented surface; reaching into an internal field
+    // (e.g. a `.inner`) is more likely to break across a major risc0-zkvm
+    // version bump like the one this project just went through (1.2 -> 3).
+    // This does mean `seal_bytes` is slightly redundant with
+    // `journal_bytes` (the journal is embedded in the receipt too) --
+    // harmless at this project's scale. If you wire up the
+    // onchain-groth16 verifier later, re-check exactly what byte layout
+    // it expects and adjust accordingly.
 
     let bundle = ProofBundle {
         journal_hex: hex::encode(&journal_bytes),

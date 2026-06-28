@@ -26,7 +26,10 @@
 //! deadline pressure.
 //!
 //! Signature kept stable so swapping verification backends doesn't change
-//! `lib.rs`.
+//! `lib.rs`. NOTE: as of host/src/main.rs's current implementation,
+//! `seal` is the bincode-serialized *whole* Receipt (journal included),
+//! not an isolated seal field -- adjust this doc and the implementation
+//! together if that changes.
 
 #[allow(unused_variables)]
 pub fn verify_onchain(journal: &[u8], seal: &[u8], method_id: &[u8; 32]) -> bool {

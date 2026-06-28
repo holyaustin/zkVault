@@ -40,7 +40,7 @@ revealing the balance. Built on RISC Zero + Odra.
   locally, and writes `proof.json` (journal + seal, hex-encoded — no
   balance).
 - **`contract`** — the Odra/Casper verifier contract. Two feature-gated
-  verification backends (see below), plus `src/bin/check_eligibility.rs`
+  verification backends (see below), plus `bin/check_eligibility.rs`
   — a `--features livenet` binary that makes a real read-only call
   against the deployed contract via Odra's `HostRefLoader`, used by the
   frontend's status check.
@@ -94,6 +94,16 @@ cargo install cargo-odra
 cargo install casper-client
 ```
 
+**Security note:** this project pins `risc0-zkvm` / `risc0-build` to `"3"`.
+An earlier draft pinned `"1.2"`, which resolves to a version affected by
+[CVE-2025-61588](https://github.com/risc0/risc0/security/advisories/GHSA-jqq4-c7wq-36h7)
+— a critical (CVSS 9.3) memory-safety bug in `sys_read` that lets a
+malicious host write to arbitrary guest memory. If you've already run
+`cargo build` against an older copy of this repo, run `cargo update` and
+confirm `cargo tree -p risc0-zkvm` shows `>=3.0.3` (or `>=2.3.2` if you
+have a reason to stay on the 2.x line) before trusting any proof it
+produced.
+
 ## Frontend setup
 
 ```bash
@@ -107,7 +117,7 @@ npm run dev
 
 Also copy `.env.sample` (workspace root) to `.env` and fill in your testnet
 key path — `frontend/app/api/eligibility/route.ts` shells out to
-`contract/src/bin/check_eligibility.rs`, which reads those vars.
+`contract/bin/check_eligibility.rs`, which reads those vars.
 
 The frontend has two tabs:
 
@@ -131,6 +141,8 @@ agent's own operating wallet.
 ```bash
 # 1. Build guest + contract wasm
 ./scripts/build_all.sh
+# -> watch its output for the actual wasm path/filename it reports;
+#    deploy_testnet.sh's WASM_PATH default assumes contract/wasm/ZkVault.wasm
 
 # 2. Generate a real ZK proof (balance stays local to this process)
 cargo run --release -p zkvault-host -- \
@@ -165,28 +177,32 @@ cargo run --release -p zkvault-contract --features livenet \
 ## Known engineering risk / things to double check against your installed
 ## tool versions before deploy day
 
-- **Odra macro surface** (`Var`, `Mapping`, `#[odra::module]`,
-  `#[odra::odra_error]`, `self.env().emit_event`) targets Odra 2.x. Run
-  `cargo odra build -b casper` early and reconcile any compile errors
-  against https://odra.dev/docs for your exact installed version. Current
-  Odra tutorials also show an `odra-build` + `bin/build_contract.rs` /
-  `bin/build_schema.rs` pattern as an alternative build path — see the
-  note in `contract/Cargo.toml` if `cargo odra build` doesn't work for you.
+- **`odra_build::build_contract()` / `build_schema()` function bodies**
+  in `contract/bin/build_contract.rs` / `build_schema.rs` — confirmed (via
+  Odra's own current tutorial, including real terminal output) that this
+  bin-script + `odra-build` pattern is what replaced the older
+  `cargo odra build -b casper` CLI command, and confirmed the surrounding
+  Cargo.toml wiring exactly. The one-line function bodies themselves are
+  a best-effort match to that convention, not verified verbatim. If they
+  don't compile: run `cargo odra new --name scaffold --template workspace`
+  in a scratch directory and copy its generated `bin/build_contract.rs`
+  body in — guaranteed correct for your installed version, zero guessing.
+- **Wasm output filename** — confirmed Odra names it after the contract
+  *struct* (e.g. `ZkVault.wasm`), not the crate name. `deploy_testnet.sh`
+  defaults to `contract/wasm/ZkVault.wasm`; double check against
+  `build_all.sh`'s actual output.
 - **`HostRefLoader::load(&env, address)`** in
-  `contract/src/bin/check_eligibility.rs` — confirmed that Odra's
+  `contract/bin/check_eligibility.rs` — confirmed that Odra's
   `HostRefLoader` trait is what attaches to an already-deployed contract
   (vs. deploying a fresh one), but its exact method name wasn't directly
   verified. If this doesn't compile, check `odra::host::HostRefLoader` on
   docs.rs for your installed version.
 - **`--session-arg` type syntax** in `deploy_testnet.sh` /
   `submit_proof.sh` (e.g. `fixed_list<u8>` vs `bytes` vs a constructor-args
-  JSON file) depends on how `cargo-odra` packages your constructor args —
-  check its build output / odra's own deploy helper for the exact
-  invocation rather than trusting the placeholder syntax here verbatim.
-- **`risc0-zkvm` / `risc0-build` versions**: pin to whatever
-  `rzup install` gives you; the `1.2` version pins here are a starting
-  point, not gospel — `cargo update` if `cargo build` complains about
-  yanked or incompatible versions.
+  JSON file) depends on how your build packages the constructor args —
+  check `cargo odra build --help` / the schema from `build_schema.rs` for
+  the exact invocation rather than trusting the placeholder syntax here
+  verbatim.
 - **casper-js-sdk's `CLValueBuilder` byte-array constructor** in
   `frontend/lib/casperDeploy.ts` — the exact method name for raw bytes has
   varied across major versions of that package; check its current export
@@ -196,6 +212,24 @@ cargo run --release -p zkvault-contract --features livenet \
   confirmed verbatim against `@make-software/csprclick-core-types`'s
   exported event enum; check that package if the wallet bar doesn't update
   on connect.
+
+## Troubleshooting log
+
+Real errors hit while building this, for anyone who searches their way
+here with the same ones:
+
+- **`failed to get image ID using r0vm: ... Malformed ProgramBinary`**
+  during the guest build — version mismatch between the `r0vm` toolchain
+  `rzup install` gave you and the `risc0-zkvm`/`risc0-build` versions
+  pinned in Cargo.toml (RISC Zero changed its low-level VM/ELF format
+  across major versions). Fixed by pinning both to `"3"` everywhere (see
+  the security note above — this also happens to fix a real CVE, it
+  wasn't pinned to `"1.2"` for any good reason).
+- **`cargo odra build: error: unexpected argument '-b' found`** — that
+  CLI flag is from an older cargo-odra generation. Current Odra (2.x)
+  builds via binaries inside your own crate instead — see
+  `contract/bin/build_contract.rs` and the Cargo.toml `[[bin]]` entries
+  pointing at it.
 
 ## CSPR.click integration
 

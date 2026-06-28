@@ -25,7 +25,10 @@ cd "$(dirname "$0")/.."
 
 NODE_ADDRESS="${NODE_ADDRESS:-https://node.testnet.casper.network:7777}"
 CHAIN_NAME="${CHAIN_NAME:-casper-test}"
-WASM_PATH="${WASM_PATH:-contract/wasm/zkvault_contract.wasm}"
+# Confirmed convention: Odra names the wasm after the contract STRUCT
+# (ZkVault), not the crate (zkvault-contract). Override if build_all.sh's
+# output showed a different path/name.
+WASM_PATH="${WASM_PATH:-contract/wasm/ZkVault.wasm}"
 
 casper-client put-deploy \
   --node-address "$NODE_ADDRESS" \

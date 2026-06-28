@@ -6,10 +6,12 @@
 //!
 //! NOTE ON API SURFACE: this targets Odra 2.x (`Var`, `Mapping`,
 //! `#[odra::module]`, `self.env()`). Odra's macro surface moves between
-//! releases — run `cargo odra build -b casper` early against the version
-//! you actually have installed (`cargo odra --version`) and reconcile any
-//! drift against https://odra.dev/docs before you're deploying against the
-//! clock.
+//! releases — run `cargo run --release --bin zkvault_contract_build_contract`
+//! (see bin/build_contract.rs) early and reconcile any compile errors
+//! against https://odra.dev/docs for your exact installed version. (An
+//! older `cargo odra build -b casper` CLI command doesn't accept that
+//! flag on current cargo-odra -- this project hit that directly, see
+//! README "Troubleshooting log".)
 
 #[cfg(feature = "onchain-groth16")]
 mod verifier;

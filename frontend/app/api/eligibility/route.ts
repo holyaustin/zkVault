@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile);
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT ?? path.resolve(process.cwd(), "..");
 
 /**
- * Shells out to contract/src/bin/check_eligibility.rs, which makes a real
+ * Shells out to contract/bin/check_eligibility.rs, which makes a real
  * read-only call against the deployed ZkVault contract via Odra's livenet
  * HostRefLoader -- not a hand-rolled parse of Casper's global-state /
  * dictionary wire format. See that file's doc comment for the one Odra

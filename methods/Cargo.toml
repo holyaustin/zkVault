@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-risc0-build = "1.2"
+# Keep in sync with methods/guest/Cargo.toml's risc0-zkvm pin -- see the
+# security note there (CVE-2025-61588).
+risc0-build = "3"
 
 [package.metadata.risc0]
 methods = ["guest"]

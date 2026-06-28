@@ -13,9 +13,8 @@ crate-type = ["rlib"]
 odra = { version = "2", default-features = false }
 
 # --- livenet-only tooling --------------------------------------------------
-# Pulled in only with `--features livenet` (used by the check_eligibility
-# query binary below), so the wasm build (cargo odra build -b casper) never
-# sees these.
+# Pulled in only with `--features livenet` (used by bin/check_eligibility.rs),
+# so the wasm build never sees these.
 odra-casper-livenet-env = { version = "2", optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
 anyhow = { version = "1.0", optional = true }
@@ -24,6 +23,12 @@ dotenvy = { version = "0.15", optional = true }
 
 [dev-dependencies]
 odra-test = { version = "2", default-features = false }
+
+[build-dependencies]
+# Powers bin/build_contract.rs and bin/build_schema.rs -- this is current
+# Odra 2.x's documented build path (see those files' doc comments for the
+# one thing about this still worth verifying).
+odra-build = { version = "2", default-features = false }
 
 [features]
 default = ["relayer-attested"]
@@ -44,18 +49,16 @@ onchain-groth16 = []
 livenet = ["odra-casper-livenet-env", "clap", "anyhow", "hex", "dotenvy"]
 
 [[bin]]
-name = "check_eligibility"
-path = "src/bin/check_eligibility.rs"
-required-features = ["livenet"]
+name = "zkvault_contract_build_contract"
+path = "bin/build_contract.rs"
+test = false
 
-# NOTE: current Odra docs (2.2.0/2.3.1 tutorials) show projects ALSO
-# wiring up `odra-build` as a build-dependency plus `bin/build_contract.rs`
-# / `bin/build_schema.rs` binaries for producing the wasm + ABI schema,
-# as an alternative/successor to the `cargo odra build -b casper` CLI flow
-# this repo's scripts/build_all.sh uses. Both may coexist depending on your
-# installed Odra version. If `cargo odra build -b casper` errors out on
-# your machine, check https://odra.dev/docs/tutorials/deploying-on-casper/
-# for the current bin-script pattern and the odra-build crate -- that
-# tutorial's exact build_contract.rs/build_schema.rs bodies weren't
-# something I could verify directly, so they're not included here rather
-# than guessed.
+[[bin]]
+name = "zkvault_contract_build_schema"
+path = "bin/build_schema.rs"
+test = false
+
+[[bin]]
+name = "check_eligibility"
+path = "bin/check_eligibility.rs"
+required-features = ["livenet"]

@@ -12,7 +12,13 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-risc0-zkvm = { version = "1.2", default-features = false, features = ["std"] }
+# SECURITY: v1.2 had a disclosed critical RCE in risc0-zkvm-platform
+# (CVE-2025-61588, sys_read memory-safety bug, CVSS 9.3) -- fixed in
+# risc0-zkvm 2.3.2 / 3.0.3+. Pinning "3" here also matches the r0vm
+# toolchain `rzup install` gives you today; a version mismatch between
+# the r0vm binary and this crate is what causes "Malformed ProgramBinary"
+# during the guest build. Keep these in sync if you ever change one.
+risc0-zkvm = { version = "3", default-features = false, features = ["std"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 
 [[bin]]

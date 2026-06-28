@@ -2,6 +2,11 @@
 //! to the already-deployed ZkVault contract via Odra's Livenet backend and
 //! calling its `is_eligible` / `threshold_used` view entry points.
 //!
+//! Lives in bin/ (not src/bin/) to match the layout Odra's own current
+//! tutorials use for livenet/build binaries (see e.g.
+//! https://odra.dev/docs/2.3.1/tutorials/deploying-on-casper/ -- its
+//! `our_token_livenet` binary lives at `bin/our_token_livenet.rs`).
+//!
 //! Only built with `--features livenet` (see Cargo.toml), so the wasm
 //! contract build never pulls in clap/anyhow/dotenvy/etc.
 //!
