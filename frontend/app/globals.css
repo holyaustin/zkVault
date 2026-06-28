@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: theme("colors.vault.ink");
+    color: theme("colors.parchment.DEFAULT");
+  }
+
+  ::selection {
+    background-color: theme("colors.brass.DEFAULT");
+    color: theme("colors.vault.ink");
+  }
+
+  :focus-visible {
+    outline: 2px solid theme("colors.brass.bright");
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-stamp,
+  .animate-redact-sweep {
+    animation: none !important;
+  }
+}

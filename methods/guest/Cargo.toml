@@ -3,6 +3,14 @@ name = "zkvault-guest"
 version = "0.1.0"
 edition = "2021"
 
+# Required: tells Cargo this crate is its OWN workspace root, fully
+# decoupled from the parent workspace. risc0_build::embed_methods() runs
+# `cargo metadata` scoped to this directory, and without this empty
+# [workspace] table that lookup walks up and collides with the parent
+# Cargo.toml even though the parent excludes this path — you'll see
+# "current package believes it's in a workspace when it's not" otherwise.
+[workspace]
+
 [dependencies]
 risc0-zkvm = { version = "1.2", default-features = false, features = ["std"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
