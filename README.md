@@ -14,9 +14,17 @@ revealing the balance. Built on RISC Zero + Odra.
 └──────────┬───────┘   journal + seal     └──────────────────────┘
            │  proof.json
            ▼
+┌──────────────────────────┐   GET    ┌───────────────────────────────┐
+│  frontend/ (Next.js)       │────────▶  contract/.../check_eligibility │
+│  app/api/prove (shells     │         │  (Odra livenet HostRefLoader)  │
+│   out to host/, above)     │◀────────┴────────────────────────────────┘
+│  app/api/eligibility       │
+└──────────┬──────────────────┘
+           │  CSPR.click-signed deploy → verify_eligibility(journal, seal)
+           ▼
 ┌─────────────────────────┐
-│  Casper testnet          │   verify_eligibility(journal, seal)
-│  ZkVault contract         │◀─────────────────────────────────────
+│  Casper testnet          │
+│  ZkVault contract         │
 │  (contract/, Odra)        │
 └─────────────────────────┘
 ```
@@ -27,13 +35,19 @@ revealing the balance. Built on RISC Zero + Odra.
   guest.
 - **`methods`** — embeds the compiled guest ELF + image ID as Rust
   constants (`ZKVAULT_GUEST_ELF`, `ZKVAULT_GUEST_ID`).
-- **`host`** — the off-chain prover agent. Takes `--balance` (secret),
+- **`host`** — the off-chain prover agent CLI. Takes `--balance` (secret),
   `--threshold`, `--user-secret`, runs the prover, verifies the receipt
   locally, and writes `proof.json` (journal + seal, hex-encoded — no
   balance).
 - **`contract`** — the Odra/Casper verifier contract. Two feature-gated
-  verification backends — see below, this is the part to read carefully
-  before you present this.
+  verification backends (see below), plus `src/bin/check_eligibility.rs`
+  — a `--features livenet` binary that makes a real read-only call
+  against the deployed contract via Odra's `HostRefLoader`, used by the
+  frontend's status check.
+- **`frontend`** — Next.js + TypeScript + Tailwind. The actual
+  agent-facing surface: a form that drives the prover, a CSPR.click-signed
+  submission to the contract, and a status read-back. See "Frontend
+  setup" below.
 
 ## Verification modes — read this before your demo
 
@@ -80,6 +94,38 @@ cargo install cargo-odra
 cargo install casper-client
 ```
 
+## Frontend setup
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local   # then fill in NEXT_PUBLIC_ZKVAULT_CONTRACT_HASH
+                                    # after step 3 below
+npm run dev
+# -> http://localhost:3000
+```
+
+Also copy `.env.sample` (workspace root) to `.env` and fill in your testnet
+key path — `frontend/app/api/eligibility/route.ts` shells out to
+`contract/src/bin/check_eligibility.rs`, which reads those vars.
+
+The frontend has two tabs:
+
+- **Generate locally** — calls `app/api/prove`, which runs the real
+  RISC Zero prover server-side. Fine for `npm run dev` on your own
+  machine; **do not** treat this as private if you deploy the app
+  publicly (see the privacy note in that route's source).
+- **Upload sealed proof** — paste a `proof.json` you generated yourself
+  via the `host` CLI. Balance never touches this server at all, in any
+  deployment. This is the path to use for anything beyond your own laptop.
+
+Submission to the contract happens browser-side, signed by whichever
+wallet you connect via CSPR.click ("Connect relayer wallet") — that
+wallet's address must match the `trusted_relayer` the contract was
+deployed with (step 3 below), since `relayer-attested` mode checks the
+caller, not the proof math. For a hackathon demo, this is naturally your
+agent's own operating wallet.
+
 ## Running the flow end to end
 
 ```bash
@@ -104,18 +150,34 @@ ZKVAULT_CONTRACT_ADDR=<contract hash from step 3> \
 ./scripts/submit_proof.sh proof.json
 
 # 5. Confirm on-chain state via the is_eligible / threshold_used view
-#    entry points (casper-client query-state or your own small CLI),
-#    passing the user_id_hash printed in proof.json.
+#    entry points:
+cargo run --release -p zkvault-contract --features livenet \
+  --bin check_eligibility -- \
+  --contract-addr <contract hash from step 3> \
+  --user-id-hash-hex <user_id_hash_hex from proof.json>
+
+# Or skip steps 4-5's raw CLI calls entirely and drive the same flow from
+# the frontend (see "Frontend setup" above) — it wraps this exact prove /
+# submit / check sequence behind the case-file UI, with submission signed
+# in-browser via CSPR.click instead of a raw casper-client call.
 ```
 
 ## Known engineering risk / things to double check against your installed
 ## tool versions before deploy day
 
 - **Odra macro surface** (`Var`, `Mapping`, `#[odra::module]`,
-  `#[odra::odra_error]`, `self.env().emit_event`) targets Odra ~1.x. Run
+  `#[odra::odra_error]`, `self.env().emit_event`) targets Odra 2.x. Run
   `cargo odra build -b casper` early and reconcile any compile errors
-  against https://odra.dev/docs for your exact installed version —
-  Odra's API has moved between releases.
+  against https://odra.dev/docs for your exact installed version. Current
+  Odra tutorials also show an `odra-build` + `bin/build_contract.rs` /
+  `bin/build_schema.rs` pattern as an alternative build path — see the
+  note in `contract/Cargo.toml` if `cargo odra build` doesn't work for you.
+- **`HostRefLoader::load(&env, address)`** in
+  `contract/src/bin/check_eligibility.rs` — confirmed that Odra's
+  `HostRefLoader` trait is what attaches to an already-deployed contract
+  (vs. deploying a fresh one), but its exact method name wasn't directly
+  verified. If this doesn't compile, check `odra::host::HostRefLoader` on
+  docs.rs for your installed version.
 - **`--session-arg` type syntax** in `deploy_testnet.sh` /
   `submit_proof.sh` (e.g. `fixed_list<u8>` vs `bytes` vs a constructor-args
   JSON file) depends on how `cargo-odra` packages your constructor args —
@@ -125,15 +187,32 @@ ZKVAULT_CONTRACT_ADDR=<contract hash from step 3> \
   `rzup install` gives you; the `1.2` version pins here are a starting
   point, not gospel — `cargo update` if `cargo build` complains about
   yanked or incompatible versions.
+- **casper-js-sdk's `CLValueBuilder` byte-array constructor** in
+  `frontend/lib/casperDeploy.ts` — the exact method name for raw bytes has
+  varied across major versions of that package; check its current export
+  if the deploy fails to build.
+- **CSPR.click event names** in `frontend/components/WalletBar.tsx` — the
+  `csprclick:signed-in` / `csprclick:signed-out` event strings weren't
+  confirmed verbatim against `@make-software/csprclick-core-types`'s
+  exported event enum; check that package if the wallet bar doesn't update
+  on connect.
 
-## Extending: CSPR.click for agent-facing UX
+## CSPR.click integration
 
-The off-chain prover here is a plain CLI for clarity. If you want an AI
-agent to drive this conversationally (e.g. "check if I qualify for the
-high-yield tier"), wrap `host`'s logic behind the
-[CSPR.click](https://cspr.click/) AI agent skill / CSPR.build Agent Skills
-for wallet connection, deploy signing, and event handling, instead of the
-raw `casper-client` calls in the scripts here.
+The frontend wires up `@make-software/csprclick-ui` directly (see
+`components/ClickProviderWrapper.tsx` and `components/WalletBar.tsx`) —
+this is the "agent interacts with the contract" piece: the connected
+wallet is the agent's own operating wallet, and it signs the
+`verify_eligibility` deploy in-browser rather than via a raw
+`casper-client` call. The top navigation bar is intentionally not
+rendered (the project builds its own connect control for visual
+consistency) — see CSPR.click's React docs if you want to switch back to
+their default `<ClickUI>` bar instead.
+
+If you want this driven conversationally by an LLM agent instead of a
+form UI, the natural extension is wrapping `frontend/lib/casperDeploy.ts`
+and `app/api/*` behind tool definitions for whatever agent framework
+you're using, rather than rebuilding the Casper integration from scratch.
 
 ## Demo script suggestion
 

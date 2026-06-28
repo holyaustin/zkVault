@@ -7,7 +7,23 @@ edition = "2021"
 crate-type = ["rlib"]
 
 [dependencies]
-odra = { version = "1", default-features = false }
+# Odra 2.x. Earlier drafts of this file pinned "1" -- current Odra
+# tutorials (odra.dev/docs, mid-2026) show 2.2.0/2.3.1 as the live version.
+# Re-check `cargo odra --version` / odra.dev/docs before deploy day.
+odra = { version = "2", default-features = false }
+
+# --- livenet-only tooling --------------------------------------------------
+# Pulled in only with `--features livenet` (used by the check_eligibility
+# query binary below), so the wasm build (cargo odra build -b casper) never
+# sees these.
+odra-casper-livenet-env = { version = "2", optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+anyhow = { version = "1.0", optional = true }
+hex = { version = "0.4", optional = true }
+dotenvy = { version = "0.15", optional = true }
+
+[dev-dependencies]
+odra-test = { version = "2", default-features = false }
 
 [features]
 default = ["relayer-attested"]
@@ -20,10 +36,26 @@ relayer-attested = []
 
 # Stretch goal: real cryptographic verification inside the WASM contract
 # itself (no relayer trust). Needs a no_std-compatible Groth16/BN254
-# verifier wired up in src/verifier.rs — see the TODO and links there.
-# Reference: the Casper/Odra community's RISC Zero-on-Casper experiment
-# (odra.dev/blog/casper-zk-risc0) is the right starting point.
+# verifier wired up in src/verifier.rs -- see the TODO and links there.
 onchain-groth16 = []
 
-[package.metadata.odra]
-casper_contract_runtime = "casper"
+# Enables the read-only on-chain status check (used by the frontend's
+# /api/eligibility route). Not needed for the wasm contract build itself.
+livenet = ["odra-casper-livenet-env", "clap", "anyhow", "hex", "dotenvy"]
+
+[[bin]]
+name = "check_eligibility"
+path = "src/bin/check_eligibility.rs"
+required-features = ["livenet"]
+
+# NOTE: current Odra docs (2.2.0/2.3.1 tutorials) show projects ALSO
+# wiring up `odra-build` as a build-dependency plus `bin/build_contract.rs`
+# / `bin/build_schema.rs` binaries for producing the wasm + ABI schema,
+# as an alternative/successor to the `cargo odra build -b casper` CLI flow
+# this repo's scripts/build_all.sh uses. Both may coexist depending on your
+# installed Odra version. If `cargo odra build -b casper` errors out on
+# your machine, check https://odra.dev/docs/tutorials/deploying-on-casper/
+# for the current bin-script pattern and the odra-build crate -- that
+# tutorial's exact build_contract.rs/build_schema.rs bodies weren't
+# something I could verify directly, so they're not included here rather
+# than guessed.

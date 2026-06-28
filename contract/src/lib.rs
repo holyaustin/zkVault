@@ -4,7 +4,7 @@
 //! threshold` via a RISC Zero proof — without the contract (or anyone else)
 //! ever seeing the balance.
 //!
-//! NOTE ON API SURFACE: this targets Odra ~1.x (`Var`, `Mapping`,
+//! NOTE ON API SURFACE: this targets Odra 2.x (`Var`, `Mapping`,
 //! `#[odra::module]`, `self.env()`). Odra's macro surface moves between
 //! releases — run `cargo odra build -b casper` early against the version
 //! you actually have installed (`cargo odra --version`) and reconcile any
@@ -14,8 +14,15 @@
 #[cfg(feature = "onchain-groth16")]
 mod verifier;
 
+// Address, Mapping, Var, Vec etc. all come from the prelude glob. An
+// earlier draft of this file also did `use odra::{Address, Mapping, Var};`
+// -- every Odra 2.x example actually confirmed (Counter, Flipper, ERC20
+// livenet) resolves these via `odra::prelude::*` (sometimes alongside an
+// explicit `odra::Var`, which IS re-exported at the crate root, but
+// Address/Mapping were not confirmed there) -- so importing only from the
+// prelude is the verified-safe choice; don't reintroduce the root import
+// without checking it resolves on your installed version.
 use odra::prelude::*;
-use odra::{Address, Mapping, Var};
 
 #[odra::module]
 pub struct ZkVault {
