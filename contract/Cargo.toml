@@ -1,0 +1,29 @@
+[package]
+name = "zkvault-contract"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+odra = { version = "1", default-features = false }
+
+[features]
+default = ["relayer-attested"]
+
+# Demoable in 24h: a trusted off-chain relayer runs real RISC Zero receipt
+# verification off-chain, then relays the result via its own signed Casper
+# deploy. The contract trusts the *relayer's signature*, not the proof math
+# directly. See README "Verification modes" for the honest tradeoff.
+relayer-attested = []
+
+# Stretch goal: real cryptographic verification inside the WASM contract
+# itself (no relayer trust). Needs a no_std-compatible Groth16/BN254
+# verifier wired up in src/verifier.rs — see the TODO and links there.
+# Reference: the Casper/Odra community's RISC Zero-on-Casper experiment
+# (odra.dev/blog/casper-zk-risc0) is the right starting point.
+onchain-groth16 = []
+
+[package.metadata.odra]
+casper_contract_runtime = "casper"
